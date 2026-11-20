@@ -1,9 +1,34 @@
+import { useState } from 'react'
 import Button from './Button'
+import ChatList from './ChatList'
 import TextField from './TextField'
-import { ChatIcon, PlusIcon, SearchIcon } from './Icons'
+import { ChatIcon, CloseIcon, PlusIcon, SearchIcon } from './Icons'
+import { filterChats } from '../lib/chatOperations'
 
-// Barra lateral: marca, acciones (deshabilitadas en esta fase) e historial.
-export default function Sidebar({ currentChatTitle }) {
+// Barra lateral: marca, nuevo chat, búsqueda e historial. La búsqueda es estado local.
+export default function Sidebar({ chats, activeId, onNewChat, onSelect, onRename, onDelete }) {
+  const [query, setQuery] = useState('')
+
+  const visibleChats = filterChats(chats, query)
+  const isSearching = query.trim() !== ''
+
+  // Distingue "no hay conversaciones" de "ninguna coincide con la búsqueda".
+  let emptyMessage = 'Aún no hay conversaciones.'
+  if (isSearching) {
+    emptyMessage = 'Sin coincidencias.'
+  }
+
+  // El botón de limpiar solo existe mientras hay texto de búsqueda.
+  let clearSearchButton = null
+  if (isSearching) {
+    clearSearchButton = (
+      <Button variant="compactSubtle" onClick={() => setQuery('')}>
+        <CloseIcon className="size-3" />
+        Limpiar búsqueda
+      </Button>
+    )
+  }
+
   return (
     <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-r border-line bg-sidebar p-3">
       <div className="flex items-center gap-2 px-1">
@@ -13,24 +38,30 @@ export default function Sidebar({ currentChatTitle }) {
         <span className="text-xs font-bold tracking-wide">CHATLAB</span>
       </div>
 
-      <Button disabled>
+      <Button onClick={onNewChat}>
         <PlusIcon className="size-4" />
         Nuevo chat
       </Button>
 
       <TextField
-        disabled
         label="Buscar chats"
         placeholder="Buscar chats"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
         icon={<SearchIcon className="size-3.5 shrink-0 text-muted" />}
       />
+      {clearSearchButton}
 
       <nav aria-label="Historial de conversaciones" className="flex flex-col gap-1">
         <h2 className="px-1 pt-1 text-xs font-medium uppercase text-muted">Conversaciones</h2>
-        {/* Marcador del chat en borrador; no es una conversación guardada. */}
-        <p aria-current="page" className="truncate rounded-lg bg-panel-selected px-3 py-2 text-xs font-medium text-body">
-          {currentChatTitle}
-        </p>
+        <ChatList
+          chats={visibleChats}
+          activeId={activeId}
+          emptyMessage={emptyMessage}
+          onSelect={onSelect}
+          onRename={onRename}
+          onDelete={onDelete}
+        />
       </nav>
     </aside>
   )
