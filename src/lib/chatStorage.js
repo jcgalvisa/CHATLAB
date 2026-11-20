@@ -1,5 +1,13 @@
 // Persistencia en localStorage bajo una única clave propia; nunca lee ni escribe otras.
-import { createEmptyState, USER_AUTHOR } from './chatOperations.js'
+import { createEmptyState } from './chatOperations.js'
+import {
+  INTERRUPTED_ERROR,
+  STATUS_ANSWERED,
+  STATUS_FAILED,
+  STATUS_PENDING,
+  UNSENT_ERROR,
+  USER_AUTHOR,
+} from './messageOperations.js'
 
 export const STORAGE_KEY = 'chatlab:state:v1'
 
@@ -8,16 +16,50 @@ export const CORRUPTED_WARNING =
 export const BLOCKED_WARNING =
   'El almacenamiento del navegador no está disponible. Puedes seguir trabajando, pero los cambios no se conservarán al recargar.'
 
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value !== ''
+}
+
+function isValidDate(value) {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+}
+
+function isValidAnswer(answer, message) {
+  if (typeof answer !== 'object' || answer === null) {
+    return false
+  }
+  return isNonEmptyString(answer.id) && answer.questionId === message.id && isNonEmptyString(answer.content) && isValidDate(answer.createdAt)
+}
+
+function isValidError(error) {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  return isNonEmptyString(error.category) && isNonEmptyString(error.message)
+}
+
+// `status`, `answer` y `error` pueden faltar (formato anterior); si existen, deben ser coherentes.
+function isValidStatusData(message) {
+  if (message.status === undefined) {
+    return true
+  }
+  if (message.status === STATUS_ANSWERED) {
+    return isValidAnswer(message.answer, message)
+  }
+  if (message.status === STATUS_FAILED) {
+    return isValidError(message.error)
+  }
+  return message.status === STATUS_PENDING
+}
+
 function isValidMessage(message) {
   if (typeof message !== 'object' || message === null) {
     return false
   }
-  const hasValidText =
-    typeof message.id === 'string' && message.id !== '' && typeof message.content === 'string' && message.content !== ''
-  if (!hasValidText || message.author !== USER_AUTHOR) {
+  if (!isNonEmptyString(message.id) || !isNonEmptyString(message.content) || message.author !== USER_AUTHOR) {
     return false
   }
-  return typeof message.createdAt === 'string' && !Number.isNaN(Date.parse(message.createdAt))
+  return isValidDate(message.createdAt) && isValidStatusData(message)
 }
 
 // Los chats guardados antes de existir los mensajes no tienen `messages`: es válido y se recupera como [].
@@ -31,11 +73,26 @@ function hasValidMessages(chat) {
   return new Set(chat.messages.map((message) => message.id)).size === chat.messages.length
 }
 
-function withMessages(chat) {
+// Mensajes anteriores a las respuestas no tienen estado: nunca se enviaron, se pueden reintentar.
+// Una pregunta pendiente al recargar quedó interrumpida: no se reenvía sola ni bloquea el chat.
+function restoreMessage(message) {
+  if (message.status === undefined) {
+    return { ...message, status: STATUS_FAILED, answer: null, error: UNSENT_ERROR }
+  }
+  if (message.status === STATUS_PENDING) {
+    return { ...message, status: STATUS_FAILED, answer: null, error: INTERRUPTED_ERROR }
+  }
+  if (message.status === STATUS_ANSWERED) {
+    return { ...message, error: null }
+  }
+  return { ...message, answer: null }
+}
+
+function restoreChat(chat) {
   if (chat.messages === undefined) {
     return { ...chat, messages: [] }
   }
-  return chat
+  return { ...chat, messages: chat.messages.map(restoreMessage) }
 }
 
 function isValidChat(chat) {
@@ -93,7 +150,7 @@ export function loadState() {
   if (!isValidState(parsed)) {
     return { state: createEmptyState(), warning: CORRUPTED_WARNING }
   }
-  return { state: { ...parsed, chats: parsed.chats.map(withMessages) }, warning: null }
+  return { state: { ...parsed, chats: parsed.chats.map(restoreChat) }, warning: null }
 }
 
 // Devuelve un aviso si no se pudo guardar, o null si se guardó.

@@ -1,16 +1,14 @@
 import { useEffect, useRef } from 'react'
+import MessageItem from './MessageItem'
 
 // Margen (px) para considerar que la lista está "al final".
 const BOTTOM_TOLERANCE = 8
 
-function formatTime(isoDate) {
-  return new Date(isoDate).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-}
-
-// Historial desplazable de mensajes del usuario, alineados a la derecha.
+// Historial desplazable: preguntas a la derecha y respuestas a la izquierda.
 // Se usa con key={chatId}: al cambiar de chat se monta de nuevo y baja al último mensaje.
-export default function MessageList({ messages }) {
+export default function MessageList({ messages, isChatBusy, onRetry }) {
   const listRef = useRef(null)
+  const contentRef = useRef(null)
   // Si la persona estaba al final, se mantiene allí al llegar mensajes o cambiar el alto disponible.
   const isAtBottomRef = useRef(true)
 
@@ -28,7 +26,8 @@ export default function MessageList({ messages }) {
     scrollToBottom()
   }, [messages.length])
 
-  // Si el compositor crece o la ventana cambia de tamaño, el último mensaje no debe quedar tapado.
+  // Si el compositor crece, la ventana cambia de tamaño o una respuesta/error alarga el contenido,
+  // el último mensaje no debe quedar tapado (solo si la persona ya estaba al final).
   useEffect(() => {
     const observer = new ResizeObserver(() => {
       if (isAtBottomRef.current) {
@@ -36,6 +35,7 @@ export default function MessageList({ messages }) {
       }
     })
     observer.observe(listRef.current)
+    observer.observe(contentRef.current)
     return () => observer.disconnect()
   }, [])
 
@@ -47,16 +47,9 @@ export default function MessageList({ messages }) {
       onScroll={handleScroll}
       className="min-h-0 flex-1 overflow-y-auto px-4 py-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
     >
-      <ul className="mx-auto flex w-full max-w-xl flex-col gap-3">
+      <ul ref={contentRef} className="mx-auto flex w-full max-w-xl flex-col gap-3">
         {messages.map((message) => (
-          <li key={message.id} className="flex min-w-0 flex-col items-end gap-1">
-            <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-panel-selected px-4 py-2 text-sm text-strong wrap-anywhere">
-              {message.content}
-            </p>
-            <time dateTime={message.createdAt} className="text-xs text-subtle">
-              {formatTime(message.createdAt)}
-            </time>
-          </li>
+          <MessageItem key={message.id} message={message} isChatBusy={isChatBusy} onRetry={onRetry} />
         ))}
       </ul>
     </section>

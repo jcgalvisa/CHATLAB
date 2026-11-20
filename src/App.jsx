@@ -7,6 +7,7 @@ import Composer from './components/Composer'
 import { useChats } from './hooks/useChats'
 import { useNewChatShortcut } from './hooks/useNewChatShortcut'
 import { getActiveDraft, getActiveMessages, getActiveTitle } from './lib/chatOperations'
+import { isActiveChatBusy } from './lib/messageOperations'
 
 function App() {
   const chats = useChats()
@@ -14,9 +15,17 @@ function App() {
 
   // Sin mensajes se muestra la bienvenida; con mensajes, el historial del chat activo.
   const messages = getActiveMessages(chats.state)
+  const isBusy = isActiveChatBusy(chats.state)
   let conversation = <Welcome />
   if (messages.length > 0) {
-    conversation = <MessageList key={chats.state.activeId} messages={messages} />
+    conversation = (
+      <MessageList
+        key={chats.state.activeId}
+        messages={messages}
+        isChatBusy={isBusy}
+        onRetry={(messageId) => chats.retryMessage(chats.state.activeId, messageId)}
+      />
+    )
   }
 
   return (
@@ -33,7 +42,7 @@ function App() {
         <ChatHeader title={getActiveTitle(chats.state)} />
         <StorageNotice message={chats.warning} />
         {conversation}
-        <Composer value={getActiveDraft(chats.state)} onChange={chats.updateDraft} onSend={chats.sendMessage} />
+        <Composer value={getActiveDraft(chats.state)} onChange={chats.updateDraft} onSend={chats.sendMessage} isBusy={isBusy} />
       </main>
     </div>
   )

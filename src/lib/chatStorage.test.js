@@ -2,7 +2,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadState, saveState, STORAGE_KEY, CORRUPTED_WARNING, BLOCKED_WARNING } from './chatStorage.js'
-import { createEmptyState, sendDraft, setActiveDraft, startNewChat } from './chatOperations.js'
+import { createEmptyState, setActiveDraft, startNewChat } from './chatOperations.js'
+import { failMessage, resolveMessage, sendDraft } from './messageOperations.js'
 
 const FOREIGN_KEY = 'otra-app:datos'
 
@@ -118,11 +119,48 @@ test('formato anterior sin messages: se recupera con [] y conserva nombres, sele
   assert.equal(data[FOREIGN_KEY], 'intacto')
 })
 
-test('los mensajes guardados se recuperan intactos', () => {
+test('respuestas y errores guardados se recuperan intactos', () => {
   installStorage()
-  let state = sendDraft(setActiveDraft(createEmptyState(), 'hola\nmundo'))
+  let state = sendDraft(setActiveDraft(createEmptyState(), 'hola'))
+  const chatId = state.activeId
+  state = resolveMessage(state, chatId, state.chats[0].messages[0].id, 'respuesta')
+  state = sendDraft(setActiveDraft(state, 'segunda'))
+  state = failMessage(state, chatId, state.chats[0].messages[1].id, { category: 'timeout', message: 'tardó' })
   saveState(state)
   assert.deepEqual(loadState().state, state)
+})
+
+test('una pregunta pendiente al recargar queda interrumpida y fallida, sin respuesta ni bloqueo', () => {
+  installStorage()
+  const pending = sendDraft(setActiveDraft(createEmptyState(), 'hola'))
+  saveState(pending)
+  const { state, warning } = loadState()
+  assert.equal(warning, null)
+  const [message] = state.chats[0].messages
+  assert.deepEqual([message.status, message.answer, message.error.category], ['failed', null, 'interrupted'])
+  assert.equal(message.content, 'hola')
+})
+
+test('mensajes anteriores sin estado se recuperan como no enviados y reintentables', () => {
+  const old = {
+    chats: [
+      {
+        id: 'a',
+        name: 'Viejo',
+        customName: false,
+        draft: 'borr',
+        messages: [{ id: 'm1', author: 'user', content: 'hola', createdAt: '2025-01-01T00:00:00.000Z' }],
+      },
+    ],
+    activeId: 'a',
+    provisionalDraft: '',
+  }
+  installStorage({ [STORAGE_KEY]: JSON.stringify(old) })
+  const { state, warning } = loadState()
+  assert.equal(warning, null)
+  const [message] = state.chats[0].messages
+  assert.deepEqual([message.status, message.answer, message.error.category, message.content], ['failed', null, 'unsent', 'hola'])
+  assert.equal(state.chats[0].draft, 'borr')
 })
 
 const corruptedMessages = {
@@ -145,5 +183,21 @@ for (const [name, extra] of Object.entries(corruptedMessages)) {
     const { state, warning } = loadState()
     assert.equal(warning, CORRUPTED_WARNING)
     assert.deepEqual(state, createEmptyState())
+  })
+}
+
+const corruptedStatus = {
+  'respondido sin respuesta': { status: 'answered' },
+  'respuesta con questionId ajeno': { status: 'answered', answer: { id: 'r', questionId: 'otro', content: 'x', createdAt: '2025-01-01T00:00:00.000Z' } },
+  'fallido sin error': { status: 'failed' },
+  'estado desconocido': { status: 'raro' },
+}
+
+for (const [name, extra] of Object.entries(corruptedStatus)) {
+  test(`estado de mensaje dañado (${name}) se trata como datos dañados`, () => {
+    const message = { id: 'm', author: 'user', content: 'x', createdAt: '2025-01-01T00:00:00.000Z', ...extra }
+    const chat = { id: 'a', name: 'A', customName: false, draft: '', messages: [message] }
+    installStorage({ [STORAGE_KEY]: JSON.stringify({ chats: [chat], activeId: null, provisionalDraft: '' }) })
+    assert.equal(loadState().warning, CORRUPTED_WARNING)
   })
 }

@@ -9,7 +9,7 @@ export default function Welcome() {
       </span>
       <h1 className="text-base font-semibold">¿En qué puedo ayudarte?</h1>
       <p className="max-w-xs text-xs text-muted sm:max-w-sm">
-        Escribe una pregunta para comenzar. La respuesta aparecerá cuando conectemos el servicio de IA.
+        Escribe una pregunta para comenzar. Se enviará al servicio de IA y la respuesta aparecerá aquí.
       </p>
     </section>
   )
