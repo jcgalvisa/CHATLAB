@@ -1,5 +1,5 @@
 // Persistencia en localStorage bajo una única clave propia; nunca lee ni escribe otras.
-import { createEmptyState } from './chatOperations.js'
+import { createEmptyState, USER_AUTHOR } from './chatOperations.js'
 
 export const STORAGE_KEY = 'chatlab:state:v1'
 
@@ -7,6 +7,36 @@ export const CORRUPTED_WARNING =
   'Los datos guardados estaban dañados y se descartaron. Puedes seguir trabajando con un historial nuevo.'
 export const BLOCKED_WARNING =
   'El almacenamiento del navegador no está disponible. Puedes seguir trabajando, pero los cambios no se conservarán al recargar.'
+
+function isValidMessage(message) {
+  if (typeof message !== 'object' || message === null) {
+    return false
+  }
+  const hasValidText =
+    typeof message.id === 'string' && message.id !== '' && typeof message.content === 'string' && message.content !== ''
+  if (!hasValidText || message.author !== USER_AUTHOR) {
+    return false
+  }
+  return typeof message.createdAt === 'string' && !Number.isNaN(Date.parse(message.createdAt))
+}
+
+// Los chats guardados antes de existir los mensajes no tienen `messages`: es válido y se recupera como [].
+function hasValidMessages(chat) {
+  if (chat.messages === undefined) {
+    return true
+  }
+  if (!Array.isArray(chat.messages) || !chat.messages.every(isValidMessage)) {
+    return false
+  }
+  return new Set(chat.messages.map((message) => message.id)).size === chat.messages.length
+}
+
+function withMessages(chat) {
+  if (chat.messages === undefined) {
+    return { ...chat, messages: [] }
+  }
+  return chat
+}
 
 function isValidChat(chat) {
   if (typeof chat !== 'object' || chat === null) {
@@ -17,7 +47,7 @@ function isValidChat(chat) {
   if (!hasValidText) {
     return false
   }
-  return chat.name.trim() !== '' && typeof chat.customName === 'boolean'
+  return chat.name.trim() !== '' && typeof chat.customName === 'boolean' && hasValidMessages(chat)
 }
 
 function isValidState(value) {
@@ -63,7 +93,7 @@ export function loadState() {
   if (!isValidState(parsed)) {
     return { state: createEmptyState(), warning: CORRUPTED_WARNING }
   }
-  return { state: parsed, warning: null }
+  return { state: { ...parsed, chats: parsed.chats.map(withMessages) }, warning: null }
 }
 
 // Devuelve un aviso si no se pudo guardar, o null si se guardó.

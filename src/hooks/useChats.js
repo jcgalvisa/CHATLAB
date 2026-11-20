@@ -21,6 +21,7 @@ export function useChats() {
     warning,
     startNewChat: () => setState((current) => operations.startNewChat(current)),
     selectChat: (id) => setState((current) => operations.selectChat(current, id)),
+    sendMessage: () => setState((current) => operations.sendDraft(current)),
     updateDraft: (text) => setState((current) => operations.setActiveDraft(current, text)),
     renameChat: (id, name) => setState((current) => operations.renameChat(current, id, name)),
     deleteChat: (id) => setState((current) => operations.deleteChat(current, id)),

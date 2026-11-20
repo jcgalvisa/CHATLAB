@@ -6,7 +6,7 @@ const variantClasses = {
   primary:
     'w-full rounded-lg bg-inverse px-3 py-2.5 text-on-inverse hover:bg-inverse-hover disabled:bg-disabled-surface disabled:text-disabled-text',
   icon: 'rounded-md p-1.5 text-muted hover:bg-hover disabled:text-subtle',
-  send: 'rounded-lg bg-send-disabled p-2 text-send-disabled-text',
+  send: 'rounded-lg bg-inverse p-2 text-on-inverse hover:bg-inverse-hover disabled:bg-send-disabled disabled:text-send-disabled-text',
   // Entrada del historial: ocupa el ancho disponible y recorta el texto largo.
   item: 'min-w-0 flex-1 justify-start rounded-lg px-3 py-2 text-xs text-body hover:bg-hover',
   compact: 'rounded-md bg-inverse px-2 py-1 text-xs text-on-inverse hover:bg-inverse-hover',

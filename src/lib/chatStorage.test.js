@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadState, saveState, STORAGE_KEY, CORRUPTED_WARNING, BLOCKED_WARNING } from './chatStorage.js'
-import { createEmptyState, setActiveDraft, startNewChat } from './chatOperations.js'
+import { createEmptyState, sendDraft, setActiveDraft, startNewChat } from './chatOperations.js'
 
 const FOREIGN_KEY = 'otra-app:datos'
 
@@ -95,3 +95,55 @@ test('guardar escribe solo la clave propia', () => {
   assert.deepEqual(Object.keys(data).sort(), [FOREIGN_KEY, STORAGE_KEY].sort())
   assert.equal(data[FOREIGN_KEY], 'intacto')
 })
+
+test('formato anterior sin messages: se recupera con [] y conserva nombres, selección y borradores', () => {
+  const old = {
+    chats: [
+      { id: 'a', name: 'Recetas', customName: true, draft: 'pendiente' },
+      { id: 'b', name: 'Nuevo chat', customName: false, draft: '' },
+    ],
+    activeId: 'a',
+    provisionalDraft: 'prov',
+  }
+  const data = installStorage({ [STORAGE_KEY]: JSON.stringify(old), [FOREIGN_KEY]: 'intacto' })
+  const { state, warning } = loadState()
+  assert.equal(warning, null)
+  assert.deepEqual(state.chats.map((c) => c.messages), [[], []])
+  assert.deepEqual(state.chats.map((c) => [c.name, c.customName, c.draft]), [
+    ['Recetas', true, 'pendiente'],
+    ['Nuevo chat', false, ''],
+  ])
+  assert.equal(state.activeId, 'a')
+  assert.equal(state.provisionalDraft, 'prov')
+  assert.equal(data[FOREIGN_KEY], 'intacto')
+})
+
+test('los mensajes guardados se recuperan intactos', () => {
+  installStorage()
+  let state = sendDraft(setActiveDraft(createEmptyState(), 'hola\nmundo'))
+  saveState(state)
+  assert.deepEqual(loadState().state, state)
+})
+
+const corruptedMessages = {
+  'messages no es lista': { messages: 'x' },
+  'mensaje con autor inválido': { messages: [{ id: 'm', author: 'bot', content: 'x', createdAt: '2025-01-01T00:00:00.000Z' }] },
+  'mensaje sin contenido': { messages: [{ id: 'm', author: 'user', content: '', createdAt: '2025-01-01T00:00:00.000Z' }] },
+  'mensaje con fecha inválida': { messages: [{ id: 'm', author: 'user', content: 'x', createdAt: 'nunca' }] },
+  'ids de mensaje repetidos': {
+    messages: [
+      { id: 'm', author: 'user', content: 'x', createdAt: '2025-01-01T00:00:00.000Z' },
+      { id: 'm', author: 'user', content: 'y', createdAt: '2025-01-01T00:00:00.000Z' },
+    ],
+  },
+}
+
+for (const [name, extra] of Object.entries(corruptedMessages)) {
+  test(`mensajes dañados (${name}) se tratan como datos dañados`, () => {
+    const chat = { id: 'a', name: 'A', customName: false, draft: '', ...extra }
+    installStorage({ [STORAGE_KEY]: JSON.stringify({ chats: [chat], activeId: null, provisionalDraft: '' }) })
+    const { state, warning } = loadState()
+    assert.equal(warning, CORRUPTED_WARNING)
+    assert.deepEqual(state, createEmptyState())
+  })
+}

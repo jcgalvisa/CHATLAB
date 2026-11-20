@@ -1,23 +1,26 @@
 // Operaciones puras sobre el estado de chats. No tocan React ni el almacenamiento.
 //
 // Forma del estado:
-//   chats:            [{ id, name, customName, draft }]
+//   chats:            [{ id, name, customName, draft, messages }]
+//   message:          { id, author, content, createdAt }
 //   activeId:         id del chat seleccionado, o null si se usa el borrador provisional
 //   provisionalDraft: borrador escrito antes de que exista algún chat
 
 export const DEFAULT_CHAT_NAME = 'Nuevo chat'
+export const USER_AUTHOR = 'user'
+const MAX_TITLE_LENGTH = 40
 
 export function createEmptyState() {
   return { chats: [], activeId: null, provisionalDraft: '' }
 }
 
 function createChat(draft) {
-  return { id: crypto.randomUUID(), name: DEFAULT_CHAT_NAME, customName: false, draft }
+  return { id: crypto.randomUUID(), name: DEFAULT_CHAT_NAME, customName: false, draft, messages: [] }
 }
 
-// Un chat se puede reutilizar solo si no tiene borrador ni nombre elegido por la persona.
+// Un chat se puede reutilizar solo si no tiene mensajes, borrador ni nombre elegido por la persona.
 export function isReusableChat(chat) {
-  return chat.draft === '' && !chat.customName
+  return chat.messages.length === 0 && chat.draft === '' && !chat.customName
 }
 
 export function normalizeChatName(rawName) {
@@ -34,6 +37,14 @@ export function getActiveDraft(state) {
     return state.provisionalDraft
   }
   return chat.draft
+}
+
+export function getActiveMessages(state) {
+  const chat = getActiveChat(state)
+  if (chat === undefined) {
+    return []
+  }
+  return chat.messages
 }
 
 export function getActiveTitle(state) {
@@ -82,6 +93,49 @@ export function setActiveDraft(state, text) {
     return { ...item, draft: text }
   })
   return { ...state, chats }
+}
+
+// Título automático: primera línea del mensaje, con espacios colapsados y longitud limitada.
+function buildTitleFromMessage(content) {
+  const firstLine = content.split(/\r?\n/)[0].replace(/\s+/g, ' ').trim()
+  if (firstLine.length <= MAX_TITLE_LENGTH) {
+    return firstLine
+  }
+  return `${firstLine.slice(0, MAX_TITLE_LENGTH).trimEnd()}…`
+}
+
+function createUserMessage(content) {
+  return { id: crypto.randomUUID(), author: USER_AUTHOR, content, createdAt: new Date().toISOString() }
+}
+
+// Envía el borrador activo como mensaje del usuario. Única operación de envío (botón y Enter).
+// - Texto vacío o solo espacios: no hace nada.
+// - Sin chat activo: reutiliza startNewChat, que transfiere el borrador provisional.
+// - Solo el primer mensaje de un chat sin nombre personalizado genera el título.
+// - El borrador del chat se limpia, por lo que un segundo envío inmediato no duplica.
+export function sendDraft(state) {
+  const content = getActiveDraft(state).trim()
+  if (content === '') {
+    return state
+  }
+
+  let current = state
+  if (getActiveChat(current) === undefined) {
+    current = startNewChat(current)
+  }
+
+  const message = createUserMessage(content)
+  const chats = current.chats.map((chat) => {
+    if (chat.id !== current.activeId) {
+      return chat
+    }
+    let name = chat.name
+    if (chat.messages.length === 0 && !chat.customName) {
+      name = buildTitleFromMessage(content)
+    }
+    return { ...chat, name, draft: '', messages: [...chat.messages, message] }
+  })
+  return { ...current, chats }
 }
 
 // Renombra marcando el nombre como personalizado (incluso si es "Nuevo chat").
