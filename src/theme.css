@@ -1,0 +1,29 @@
+/* Única fuente de colores de CHATLAB (negro, blanco y grises).
+   Cada token genera utilidades de Tailwind: bg-app, text-muted, border-line, etc. */
+@theme {
+  --color-app: #0a0a0a;
+  --color-sidebar: #0f0f0f;
+  --color-panel: #171717;
+  --color-panel-selected: #333333;
+  --color-line: #262626;
+  --color-strong: #ffffff;
+  --color-body: #d4d4d4;
+  --color-muted: #a3a3a3;
+  --color-subtle: #737373;
+  --color-inverse: #ffffff;
+  --color-on-inverse: #0a0a0a;
+  --color-inverse-hover: #e5e5e5;
+  --color-hover: #1f1f1f;
+  --color-focus: #ffffff;
+  --color-disabled-surface: #f5f5f5;
+  --color-disabled-text: #404040;
+  --color-send-disabled: #6b6b6b;
+  --color-send-disabled-text: #d4d4d4;
+}
+
+/* Colores base de la página tomados de los tokens. */
+:root {
+  color: var(--color-strong);
+  background: var(--color-app);
+  color-scheme: dark;
+}
