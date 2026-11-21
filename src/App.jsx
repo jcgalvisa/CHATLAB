@@ -3,13 +3,20 @@ import ChatHeader from './components/ChatHeader'
 import StorageNotice from './components/StorageNotice'
 import Welcome from './components/Welcome'
 import Composer from './components/Composer'
+import MessageList from './components/MessageList'
 import { useChats } from './hooks/useChats'
 import { useNewChatShortcut } from './hooks/useNewChatShortcut'
-import { getActiveDraft, getActiveTitle } from './lib/chatOperations'
+import { getActiveDraft, getActiveMessages, getActiveTitle } from './lib/chatOperations'
 
 function App() {
   const chats = useChats()
   useNewChatShortcut(chats.startNewChat)
+
+  const messages = getActiveMessages(chats.state)
+  let conversation = <Welcome />
+  if (messages.length > 0) {
+    conversation = <MessageList key={chats.state.activeId} messages={messages} />
+  }
 
   return (
     <div className="grid h-dvh grid-cols-[10.5rem_minmax(0,1fr)] bg-app text-strong sm:grid-cols-[12.5rem_minmax(0,1fr)]">
@@ -24,8 +31,8 @@ function App() {
       <main className="flex min-h-0 min-w-0 flex-col">
         <ChatHeader title={getActiveTitle(chats.state)} />
         <StorageNotice message={chats.warning} />
-        <Welcome />
-        <Composer value={getActiveDraft(chats.state)} onChange={chats.updateDraft} />
+        {conversation}
+        <Composer value={getActiveDraft(chats.state)} onChange={chats.updateDraft} onSend={chats.sendMessage} />
       </main>
     </div>
   )
